@@ -2,7 +2,6 @@
 import TextTrackSettings from '../../../src/js/tracks/text-track-settings.js';
 import TestHelpers from '../test-helpers.js';
 import * as Events from '../../../src/js/utils/events.js';
-import safeParseTuple from 'safe-json-parse/tuple';
 import sinon from 'sinon';
 import window from 'global/window';
 import Component from '../../../src/js/component.js';
@@ -120,7 +119,7 @@ QUnit.test('should update settings', function(assert) {
   Events.trigger(player.$('.vjs-done-button'), 'click');
 
   assert.deepEqual(
-    safeParseTuple(window.localStorage.getItem('vjs-text-track-settings'))[1],
+    JSON.parse(window.localStorage.getItem('vjs-text-track-settings')),
     newSettings,
     'values are saved'
   );
@@ -382,4 +381,30 @@ QUnit.test('should update on languagechange', function(assert) {
   assert.equal(player.$('.vjs-font-percent legend').textContent, 'FONTSIZE', 'settings dialog updates on languagechange');
 
   player.dispose();
+});
+
+QUnit.test('should associate <label>s with <select>s', function(assert) {
+  const player = TestHelpers.makePlayer({
+    tracks
+  });
+
+  const firstLabelFor = player.textTrackSettings.el_.querySelector('label').getAttribute('for');
+
+  assert.ok(
+    videojs.dom.isEl(player.textTrackSettings.el_.querySelector(`#${firstLabelFor}`)),
+    'label has a `for` attribute matching an `id`'
+  );
+
+});
+
+QUnit.test('should not duplicate ids', function(assert) {
+  const player = TestHelpers.makePlayer({
+    tracks
+  });
+
+  const elements = [...player.el().querySelectorAll('[id]')];
+  const ids = elements.map(el => el.id);
+  const duplicates = elements.filter(el => ids.filter(id => id === el.id).length > 1);
+
+  assert.strictEqual(duplicates.length, 0, 'there should be no duplicate ids');
 });

@@ -22,7 +22,6 @@ import { bufferedPercent } from './utils/buffer.js';
 import * as stylesheet from './utils/stylesheet.js';
 import FullscreenApi from './fullscreen-api.js';
 import MediaError from './media-error.js';
-import safeParseTuple from 'safe-json-parse/tuple';
 import {merge} from './utils/obj';
 import {silencePromise, isPromise} from './utils/promise';
 import textTrackConverter from './tracks/text-track-list-converter.js';
@@ -34,8 +33,8 @@ import filterSource from './utils/filter-source';
 import {getMimetype, findMimetype} from './utils/mimetypes';
 import {hooks} from './utils/hooks';
 import {isObject} from './utils/obj';
-import keycode from 'keycode';
 import icons from '../images/icons.svg';
+import SpatialNavigation from './spatial-navigation.js';
 
 // The following imports are used only to ensure that the corresponding modules
 // are always included in the video.js package. Importing the modules will
@@ -52,9 +51,19 @@ import './tracks/text-track-settings.js';
 import './resize-manager.js';
 import './live-tracker.js';
 import './title-bar.js';
+import './transient-button.js';
 
 // Import Html5 tech, at least for disposing the original video tag.
 import './tech/html5.js';
+
+/** @import { TimeRange } from './utils/time' */
+/** @import HtmlTrackElement from './tracks/html-track-element' */
+
+/**
+ * @callback PlayerReadyCallback
+ * @this     {Player}
+ * @returns  {void}
+ */
 
 // The following tech events are simply re-triggered
 // on the player when they happen
@@ -286,8 +295,8 @@ const DEFAULT_BREAKPOINTS = {
  *
  * After an instance has been created it can be accessed globally in three ways:
  * 1. By calling `videojs.getPlayer('example_video_1');`
- * 2. By calling `videojs('example_video_1');` (not recomended)
- * 2. By using it directly via  `videojs.players.example_video_1;`
+ * 2. By calling `videojs('example_video_1');` (not recommended)
+ * 2. By using it directly via `videojs.players.example_video_1;`
  *
  * @extends Component
  * @global
@@ -303,7 +312,7 @@ class Player extends Component {
    * @param {Object} [options]
    *        Object of option names and values.
    *
-   * @param {Function} [ready]
+   * @param {PlayerReadyCallback} [ready]
    *        Ready callback function.
    */
   constructor(tag, options, ready) {
@@ -359,6 +368,8 @@ class Player extends Component {
     this.boundHandleTechTouchEnd_ = (e) => this.handleTechTouchEnd_(e);
     this.boundHandleTechTap_ = (e) => this.handleTechTap_(e);
 
+    this.boundUpdatePlayerHeightOnAudioOnlyMode_ = (e) => this.updatePlayerHeightOnAudioOnlyMode_(e);
+
     // default isFullscreen_ to false
     this.isFullscreen_ = false;
 
@@ -395,6 +406,7 @@ class Player extends Component {
 
     // Init state audioOnlyCache_
     this.audioOnlyCache_ = {
+      controlBarHeight: null,
       playerHeight: null,
       hiddenChildren: []
     };
@@ -560,6 +572,13 @@ class Player extends Component {
 
     if (this.isAudio()) {
       this.addClass('vjs-audio');
+    }
+
+    // Check if spatial navigation is enabled in the options.
+    // If enabled, instantiate the SpatialNavigation class.
+    if (options.spatialNavigation && options.spatialNavigation.enabled) {
+      this.spatialNavigation = new SpatialNavigation(this);
+      this.addClass('vjs-spatial-navigation-enabled');
     }
 
     // TODO: Make this smarter. Toggle user state between touching/mousing
@@ -775,6 +794,20 @@ class Player extends Component {
     tag.player = el.player = this;
     // Default state of video is paused
     this.addClass('vjs-paused');
+
+    const deviceClassNames = [
+      'IS_SMART_TV',
+      'IS_TIZEN',
+      'IS_WEBOS',
+      'IS_ANDROID',
+      'IS_IPAD',
+      'IS_IPHONE',
+      'IS_CHROMECAST_RECEIVER'
+    ].filter(key => browser[key]).map(key => {
+      return 'vjs-device-' + key.substring(3).toLowerCase().replace(/\_/g, '-');
+    });
+
+    this.addClass(...deviceClassNames);
 
     // Add a style element in the player that we'll use to set the width/height
     // of the player in a way that's still overridable by CSS, just like the
@@ -1326,6 +1359,26 @@ class Player extends Component {
     }
 
     return this.tech_;
+  }
+
+  /**
+   * An object that contains Video.js version.
+   *
+   * @typedef {Object} PlayerVersion
+   *
+   * @property {string} 'video.js' - Video.js version
+   */
+
+  /**
+   * Returns an object with Video.js version.
+   *
+   * @return {PlayerVersion}
+   *          An object with Video.js version.
+   */
+  version() {
+    return {
+      'video.js': version
+    };
   }
 
   /**
@@ -1950,7 +2003,8 @@ class Player extends Component {
   }
 
   /**
-   * Handle a double-click on the media element to enter/exit fullscreen
+   * Handle a double-click on the media element to enter/exit fullscreen,
+   * or exit documentPictureInPicture mode
    *
    * @param {Event} event
    *        the event that caused this function to trigger
@@ -1992,7 +2046,12 @@ class Player extends Component {
         ) {
 
           this.options_.userActions.doubleClick.call(this, event);
-
+        } else if (this.isInPictureInPicture() && !document.pictureInPictureElement) {
+          // Checking the presence of `window.documentPictureInPicture.window` complicates
+          // tests, checking `document.pictureInPictureElement` also works. It wouldn't
+          // be null in regular picture in picture.
+          // Exit picture in picture mode. This gesture can't trigger pip on the main window.
+          this.exitPictureInPicture();
         } else if (this.isFullscreen()) {
           this.exitFullscreen();
         } else {
@@ -2160,7 +2219,9 @@ class Player extends Component {
   handleTechError_() {
     const error = this.tech_.error();
 
-    this.error(error);
+    if (error) {
+      this.error(error);
+    }
   }
 
   /**
@@ -2438,7 +2499,7 @@ class Player extends Component {
    * Get a TimeRange object representing the current ranges of time that the user
    * has played.
    *
-   * @return { import('./utils/time').TimeRange }
+   * @return {TimeRange}
    *         A time range object that represents all the increments of time that have
    *         been played.
    */
@@ -2606,7 +2667,7 @@ class Player extends Component {
    *
    * @see [Buffered Spec]{@link http://dev.w3.org/html5/spec/video.html#dom-media-buffered}
    *
-   * @return { import('./utils/time').TimeRange }
+   * @return {TimeRange}
    *         A mock {@link TimeRanges} object (following HTML spec)
    */
   buffered() {
@@ -2617,6 +2678,92 @@ class Player extends Component {
     }
 
     return buffered;
+  }
+
+  /**
+   * Get the TimeRanges of the media that are currently available
+   * for seeking to.
+   *
+   * @see [Seekable Spec]{@link https://html.spec.whatwg.org/multipage/media.html#dom-media-seekable}
+   *
+   * @return {TimeRange}
+   *         A mock {@link TimeRanges} object (following HTML spec)
+   */
+  seekable() {
+    let seekable = this.techGet_('seekable');
+
+    if (!seekable || !seekable.length) {
+      seekable = createTimeRange(0, 0);
+    }
+
+    return seekable;
+  }
+
+  /**
+   * Returns whether the player is in the "seeking" state.
+   *
+   * @return {boolean} True if the player is in the seeking state, false if not.
+   */
+  seeking() {
+    return this.techGet_('seeking');
+  }
+
+  /**
+   * Returns whether the player is in the "ended" state.
+   *
+   * @return {boolean} True if the player is in the ended state, false if not.
+   */
+  ended() {
+    return this.techGet_('ended');
+  }
+
+  /**
+   * Returns the current state of network activity for the element, from
+   * the codes in the list below.
+   * - NETWORK_EMPTY (numeric value 0)
+   *   The element has not yet been initialised. All attributes are in
+   *   their initial states.
+   * - NETWORK_IDLE (numeric value 1)
+   *   The element's resource selection algorithm is active and has
+   *   selected a resource, but it is not actually using the network at
+   *   this time.
+   * - NETWORK_LOADING (numeric value 2)
+   *   The user agent is actively trying to download data.
+   * - NETWORK_NO_SOURCE (numeric value 3)
+   *   The element's resource selection algorithm is active, but it has
+   *   not yet found a resource to use.
+   *
+   * @see https://html.spec.whatwg.org/multipage/embedded-content.html#network-states
+   * @return {number} the current network activity state
+   */
+  networkState() {
+    return this.techGet_('networkState');
+  }
+
+  /**
+   * Returns a value that expresses the current state of the element
+   * with respect to rendering the current playback position, from the
+   * codes in the list below.
+   * - HAVE_NOTHING (numeric value 0)
+   *   No information regarding the media resource is available.
+   * - HAVE_METADATA (numeric value 1)
+   *   Enough of the resource has been obtained that the duration of the
+   *   resource is available.
+   * - HAVE_CURRENT_DATA (numeric value 2)
+   *   Data for the immediate current playback position is available.
+   * - HAVE_FUTURE_DATA (numeric value 3)
+   *   Data for the immediate current playback position is available, as
+   *   well as enough data for the user agent to advance the current
+   *   playback position in the direction of playback.
+   * - HAVE_ENOUGH_DATA (numeric value 4)
+   *   The user agent estimates that enough data is available for
+   *   playback to proceed uninterrupted.
+   *
+   * @see https://html.spec.whatwg.org/multipage/embedded-content.html#dom-media-readystate
+   * @return {number} the current playback rendering state
+   */
+  readyState() {
+    return this.techGet_('readyState');
   }
 
   /**
@@ -2986,7 +3133,7 @@ class Player extends Component {
    *        Event to check for key press
    */
   fullWindowOnEscKey(event) {
-    if (keycode.isEventKey(event, 'Esc')) {
+    if (event.key === 'Escape') {
       if (this.isFullscreen() === true) {
         if (!this.isFullWindow) {
           this.exitFullscreen();
@@ -3104,7 +3251,7 @@ class Player extends Component {
         pipWindow.document.body.classList.add('vjs-pip-window');
 
         this.player_.isInPictureInPicture(true);
-        this.player_.trigger('enterpictureinpicture');
+        this.player_.trigger({type: 'enterpictureinpicture', pipWindow});
 
         // Listen for the PiP closing event to move the video back.
         pipWindow.addEventListener('pagehide', (event) => {
@@ -3164,7 +3311,7 @@ class Player extends Component {
    * This allows player-wide hotkeys (either as defined below, or optionally
    * by an external function).
    *
-   * @param {Event} event
+   * @param {KeyboardEvent} event
    *        The `keydown` event that caused this function to be called.
    *
    * @listens keydown
@@ -3236,9 +3383,9 @@ class Player extends Component {
 
     // set fullscreenKey, muteKey, playPauseKey from `hotkeys`, use defaults if not set
     const {
-      fullscreenKey = keydownEvent => keycode.isEventKey(keydownEvent, 'f'),
-      muteKey = keydownEvent => keycode.isEventKey(keydownEvent, 'm'),
-      playPauseKey = keydownEvent => (keycode.isEventKey(keydownEvent, 'k') || keycode.isEventKey(keydownEvent, 'Space'))
+      fullscreenKey = keydownEvent => (event.key.toLowerCase() === 'f'),
+      muteKey = keydownEvent => (event.key.toLowerCase() === 'm'),
+      playPauseKey = keydownEvent => (event.key.toLowerCase() === 'k' || event.key.toLowerCase() === ' ')
     } = hotkeys;
 
     if (fullscreenKey.call(this, event)) {
@@ -3564,6 +3711,43 @@ class Player extends Component {
   }
 
   /**
+   * Add a <source> element to the <video> element.
+   *
+   * @param {string} srcUrl
+   *        The URL of the video source.
+   *
+   * @param {string} [mimeType]
+   *        The MIME type of the video source. Optional but recommended.
+   *
+   * @return {boolean}
+   *         Returns true if the source element was successfully added, false otherwise.
+   */
+  addSourceElement(srcUrl, mimeType) {
+    if (!this.tech_) {
+      return false;
+    }
+
+    return this.tech_.addSourceElement(srcUrl, mimeType);
+  }
+
+  /**
+   * Remove a <source> element from the <video> element by its URL.
+   *
+   * @param {string} srcUrl
+   *        The URL of the source to remove.
+   *
+   * @return {boolean}
+   *         Returns true if the source element was successfully removed, false otherwise.
+   */
+  removeSourceElement(srcUrl) {
+    if (!this.tech_) {
+      return false;
+    }
+
+    return this.tech_.removeSourceElement(srcUrl);
+  }
+
+  /**
    * Begin loading the src data.
    */
   load() {
@@ -3597,11 +3781,25 @@ class Player extends Component {
     if (this.tech_) {
       this.tech_.clearTracks('text');
     }
+
+    this.removeClass('vjs-playing');
+    this.addClass('vjs-paused');
+
     this.resetCache_();
     this.poster('');
     this.loadTech_(this.options_.techOrder[0], null);
     this.techCall_('reset');
     this.resetControlBarUI_();
+
+    this.error(null);
+
+    if (this.titleBar) {
+      this.titleBar.update({
+        title: undefined,
+        description: undefined
+      });
+    }
+
     if (isEvented(this)) {
       this.trigger('playerreset');
     }
@@ -4361,6 +4559,17 @@ class Player extends Component {
     return !!this.isAudio_;
   }
 
+  updatePlayerHeightOnAudioOnlyMode_() {
+    const controlBar = this.getChild('ControlBar');
+
+    if (!controlBar || this.audioOnlyCache_.controlBarHeight === controlBar.currentHeight()) {
+      return;
+    }
+
+    this.audioOnlyCache_.controlBarHeight = controlBar.currentHeight();
+    this.height(this.audioOnlyCache_.controlBarHeight);
+  }
+
   enableAudioOnlyUI_() {
     // Update styling immediately to show the control bar so we can get its height
     this.addClass('vjs-audio-only-mode');
@@ -4384,6 +4593,9 @@ class Player extends Component {
     });
 
     this.audioOnlyCache_.playerHeight = this.currentHeight();
+    this.audioOnlyCache_.controlBarHeight = controlBarHeight;
+
+    this.on('playerresize', this.boundUpdatePlayerHeightOnAudioOnlyMode_);
 
     // Set the player height the same as the control bar
     this.height(controlBarHeight);
@@ -4392,6 +4604,7 @@ class Player extends Component {
 
   disableAudioOnlyUI_() {
     this.removeClass('vjs-audio-only-mode');
+    this.off('playerresize', this.boundUpdatePlayerHeightOnAudioOnlyMode_);
 
     // Show player components that were previously hidden
     this.audioOnlyCache_.hiddenChildren.forEach(child => child.show());
@@ -4542,7 +4755,7 @@ class Player extends Component {
    *                                        from the TextTrackList and HtmlTrackElementList
    *                                        after a source change
    *
-   * @return { import('./tracks/html-track-element').default }
+   * @return {HtmlTrackElement}
    *         the HTMLTrackElement that was created and added
    *         to the HtmlTrackElementList and the remote
    *         TextTrackList
@@ -5060,13 +5273,12 @@ class Player extends Component {
     // Check if data-setup attr exists.
     if (dataSetup !== null) {
       // Parse options JSON
-      // If empty string, make it a parsable json object.
-      const [err, data] = safeParseTuple(dataSetup || '{}');
-
-      if (err) {
-        log.error(err);
+      try {
+        // If empty string, make it a parsable json object.
+        Object.assign(tagOptions, JSON.parse(dataSetup || '{}'));
+      } catch (e) {
+        log.error('data-setup', e);
       }
-      Object.assign(tagOptions, data);
     }
 
     Object.assign(baseOptions, tagOptions);
@@ -5124,7 +5336,7 @@ class Player extends Component {
    * Values other than arrays are ignored.
    *
    * @fires Player#playbackrateschange
-   * @param {number[]} newRates
+   * @param {number[]} [newRates]
    *                   The new rates that the playback rates menu should update to.
    *                   An empty array will hide the menu
    * @return {number[]} When used as a getter will return the current playback rates
@@ -5154,6 +5366,44 @@ class Player extends Component {
     */
     this.trigger('playbackrateschange');
   }
+
+  /**
+   * Reports whether or not a player has a plugin available.
+   *
+   * This does not report whether or not the plugin has ever been initialized
+   * on this player. For that, [usingPlugin]{@link Player#usingPlugin}.
+   *
+   * @method hasPlugin
+   * @param  {string}  name
+   *         The name of a plugin.
+   *
+   * @return {boolean}
+   *         Whether or not this player has the requested plugin available.
+   */
+  /* start-delete-from-build */
+  hasPlugin(name) {
+    return false;
+  }
+  /* end-delete-from-build */
+
+  /**
+   * Reports whether or not a player is using a plugin by name.
+   *
+   * For basic plugins, this only reports whether the plugin has _ever_ been
+   * initialized on this player.
+   *
+   * @method Player#usingPlugin
+   * @param  {string} name
+   *         The name of a plugin.
+   *
+   * @return {boolean}
+   *         Whether or not this player is using the requested plugin.
+   */
+  /* start-delete-from-build */
+  usingPlugin(name) {
+    return false;
+  }
+  /* end-delete-from-build */
 }
 
 /**
@@ -5311,82 +5561,14 @@ Player.prototype.options_ = {
   breakpoints: {},
   responsive: false,
   audioOnlyMode: false,
-  audioPosterMode: false
+  audioPosterMode: false,
+  spatialNavigation: {
+    enabled: false,
+    horizontalSeek: false
+  },
+  // Default smooth seeking to false
+  enableSmoothSeeking: false
 };
-
-[
-  /**
-   * Returns whether or not the player is in the "ended" state.
-   *
-   * @return {Boolean} True if the player is in the ended state, false if not.
-   * @method Player#ended
-   */
-  'ended',
-  /**
-   * Returns whether or not the player is in the "seeking" state.
-   *
-   * @return {Boolean} True if the player is in the seeking state, false if not.
-   * @method Player#seeking
-   */
-  'seeking',
-  /**
-   * Returns the TimeRanges of the media that are currently available
-   * for seeking to.
-   *
-   * @return {TimeRanges} the seekable intervals of the media timeline
-   * @method Player#seekable
-   */
-  'seekable',
-  /**
-   * Returns the current state of network activity for the element, from
-   * the codes in the list below.
-   * - NETWORK_EMPTY (numeric value 0)
-   *   The element has not yet been initialised. All attributes are in
-   *   their initial states.
-   * - NETWORK_IDLE (numeric value 1)
-   *   The element's resource selection algorithm is active and has
-   *   selected a resource, but it is not actually using the network at
-   *   this time.
-   * - NETWORK_LOADING (numeric value 2)
-   *   The user agent is actively trying to download data.
-   * - NETWORK_NO_SOURCE (numeric value 3)
-   *   The element's resource selection algorithm is active, but it has
-   *   not yet found a resource to use.
-   *
-   * @see https://html.spec.whatwg.org/multipage/embedded-content.html#network-states
-   * @return {number} the current network activity state
-   * @method Player#networkState
-   */
-  'networkState',
-  /**
-   * Returns a value that expresses the current state of the element
-   * with respect to rendering the current playback position, from the
-   * codes in the list below.
-   * - HAVE_NOTHING (numeric value 0)
-   *   No information regarding the media resource is available.
-   * - HAVE_METADATA (numeric value 1)
-   *   Enough of the resource has been obtained that the duration of the
-   *   resource is available.
-   * - HAVE_CURRENT_DATA (numeric value 2)
-   *   Data for the immediate current playback position is available.
-   * - HAVE_FUTURE_DATA (numeric value 3)
-   *   Data for the immediate current playback position is available, as
-   *   well as enough data for the user agent to advance the current
-   *   playback position in the direction of playback.
-   * - HAVE_ENOUGH_DATA (numeric value 4)
-   *   The user agent estimates that enough data is available for
-   *   playback to proceed uninterrupted.
-   *
-   * @see https://html.spec.whatwg.org/multipage/embedded-content.html#dom-media-readystate
-   * @return {number} the current playback rendering state
-   * @method Player#readyState
-   */
-  'readyState'
-].forEach(function(fn) {
-  Player.prototype[fn] = function() {
-    return this.techGet_(fn);
-  };
-});
 
 TECH_EVENTS_RETRIGGER.forEach(function(event) {
   Player.prototype[`handleTech${toTitleCase(event)}_`] = function() {
@@ -5422,34 +5604,6 @@ TECH_EVENTS_RETRIGGER.forEach(function(event) {
  *
  * @event Player#volumechange
  * @type {Event}
- */
-
-/**
- * Reports whether or not a player has a plugin available.
- *
- * This does not report whether or not the plugin has ever been initialized
- * on this player. For that, [usingPlugin]{@link Player#usingPlugin}.
- *
- * @method Player#hasPlugin
- * @param  {string}  name
- *         The name of a plugin.
- *
- * @return {boolean}
- *         Whether or not this player has the requested plugin available.
- */
-
-/**
- * Reports whether or not a player is using a plugin by name.
- *
- * For basic plugins, this only reports whether the plugin has _ever_ been
- * initialized on this player.
- *
- * @method Player#usingPlugin
- * @param  {string} name
- *         The name of a plugin.
- *
- * @return {boolean}
- *         Whether or not this player is using the requested plugin.
  */
 
 Component.registerComponent('Player', Player);

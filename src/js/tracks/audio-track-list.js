@@ -3,6 +3,8 @@
  */
 import TrackList from './track-list';
 
+/** @import AudioTrack from './audio-track' */
+
 /**
  * Anywhere we call this function we diverge from the spec
  * as we only support one enabled audiotrack at a time
@@ -10,7 +12,7 @@ import TrackList from './track-list';
  * @param {AudioTrackList} list
  *        list to work on
  *
- * @param { import('./audio-track').default } track
+ * @param {AudioTrack} track
  *        The track to skip
  *
  * @private
@@ -56,7 +58,7 @@ class AudioTrackList extends TrackList {
   /**
    * Add an {@link AudioTrack} to the `AudioTrackList`.
    *
-   * @param { import('./audio-track').default } track
+   * @param {AudioTrack} track
    *        The AudioTrack to add to the list
    *
    * @fires TrackList#addtrack

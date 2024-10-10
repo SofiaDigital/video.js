@@ -16,13 +16,15 @@ import {toTitleCase, toLowerCase} from '../utils/str.js';
 import vtt from 'videojs-vtt.js';
 import * as Guid from '../utils/guid.js';
 
+/** @import { TimeRange } from '../utils/time' */
+
 /**
  * An Object containing a structure like: `{src: 'url', type: 'mimetype'}` or string
  * that just contains the src url alone.
  * * `var SourceObject = {src: 'http://ex.com/video.mp4', type: 'video/mp4'};`
    * `var SourceString = 'http://example.com/some-video.mp4';`
  *
- * @typedef {Object|string} Tech~SourceObject
+ * @typedef {Object|string} SourceObject
  *
  * @property {string} src
  *           The url to the source
@@ -275,7 +277,7 @@ class Tech extends Component {
   /**
    * Get and create a `TimeRange` object for buffering.
    *
-   * @return { import('../utils/time').TimeRange }
+   * @return {TimeRange}
    *         The time range object that was created.
    */
   buffered() {
@@ -1280,7 +1282,7 @@ Tech.withSourceHandlers = function(_Tech) {
    *
    * TODO: Answer question: should 'probably' be prioritized over 'maybe'
    *
-   * @param {Tech~SourceObject} source
+   * @param {SourceObject} source
    *        The source object
    *
    * @param {Object} options
@@ -1308,7 +1310,7 @@ Tech.withSourceHandlers = function(_Tech) {
   /**
    * Check if the tech can support the given source.
    *
-   * @param {Tech~SourceObject} srcObj
+   * @param {SourceObject} srcObj
    *        The source object
    *
    * @param {Object} options
@@ -1371,7 +1373,7 @@ Tech.withSourceHandlers = function(_Tech) {
    * and source handlers.
    * Should never be called unless a source handler was found.
    *
-   * @param {Tech~SourceObject} source
+   * @param {SourceObject} source
    *        A source object with src and type keys
    */
   _Tech.prototype.setSource = function(source) {

@@ -12,7 +12,16 @@ import * as Fn from './utils/fn.js';
 import * as Guid from './utils/guid.js';
 import {toTitleCase, toLowerCase} from './utils/str.js';
 import {merge} from './utils/obj.js';
-import keycode from 'keycode';
+
+/** @import Player from './player' */
+
+/**
+ * A callback to be called if and when the component is ready.
+ * `this` will be the Component instance.
+ *
+ * @callback ReadyCallback
+ * @returns  {void}
+ */
 
 /**
  * Base class for all UI Components.
@@ -25,17 +34,9 @@ import keycode from 'keycode';
 class Component {
 
   /**
-   * A callback that is called when a component is ready. Does not have any
-   * parameters and any callback value will be ignored.
-   *
-   * @callback ReadyCallback
-   * @this Component
-   */
-
-  /**
    * Creates an instance of this class.
    *
-   * @param { import('./player').default } player
+   * @param {Player} player
    *        The `Player` that this class should be attached to.
    *
    * @param {Object} [options]
@@ -150,7 +151,9 @@ class Component {
    * @param {Function} fn
    *        The function to call with `EventTarget`s
    */
+  /* start-delete-from-build */
   on(type, fn) {}
+  /* end-delete-from-build */
 
   /**
    * Removes an `event listener` for a specific event from an instance of `EventTarget`.
@@ -160,10 +163,12 @@ class Component {
    * @param {string|string[]} type
    *        An event name or an array of event names.
    *
-   * @param {Function} fn
-   *        The function to remove.
+   * @param {Function} [fn]
+   *        The function to remove. If not specified, all listeners managed by Video.js will be removed.
    */
+  /* start-delete-from-build */
   off(type, fn) {}
+  /* end-delete-from-build */
 
   /**
    * This function will add an `event listener` that gets triggered only once. After the
@@ -176,7 +181,9 @@ class Component {
    * @param {Function} fn
    *        The function to be called once for each event name.
    */
+  /* start-delete-from-build */
   one(type, fn) {}
+  /* end-delete-from-build */
 
   /**
    * This function will add an `event listener` that gets triggered only once and is
@@ -190,7 +197,9 @@ class Component {
    * @param {Function} fn
    *        The function to be called once for each event name.
    */
+  /* start-delete-from-build */
   any(type, fn) {}
+  /* end-delete-from-build */
 
   /**
    * This function causes an event to happen. This will then cause any `event listeners`
@@ -211,7 +220,9 @@ class Component {
    * @param {Object} [hash]
    *        Optionally extra argument to pass through to an event listener
    */
+  /* start-delete-from-build */
   trigger(event, hash) {}
+  /* end-delete-from-build */
 
   /**
    * Dispose of the `Component` and all child components.
@@ -292,7 +303,7 @@ class Component {
   /**
    * Return the {@link Player} that the `Component` has attached to.
    *
-   * @return { import('./player').default }
+   * @return {Player}
    *         The player that this `Component` has attached to.
    */
   player() {
@@ -582,7 +593,6 @@ class Component {
   /**
    * Add a child `Component` inside the current `Component`.
    *
-   *
    * @param {string|Component} child
    *        The name or instance of a child to add.
    *
@@ -592,6 +602,7 @@ class Component {
    *
    * @param {number} [index=this.children_.length]
    *        The index to attempt to add a child into.
+   *
    *
    * @return {Component}
    *         The `Component` that gets added as a child. When using a string the
@@ -836,9 +847,6 @@ class Component {
    *
    * @param {ReadyCallback} fn
    *        Function that gets called when the `Component` is ready.
-   *
-   * @return {Component}
-   *         Returns itself; method can be chained.
    */
   ready(fn, sync = false) {
     if (!fn) {
@@ -975,10 +983,10 @@ class Component {
    * - `classToToggle` gets removed when {@link Component#hasClass} would return true.
    *
    * @param  {string} classToToggle
-   *         The class to add or remove based on (@link Component#hasClass}
+   *         The class to add or remove. Passed to DOMTokenList's toggle()
    *
-   * @param  {boolean|Dom~predicate} [predicate]
-   *         An {@link Dom~predicate} function or a boolean
+   * @param  {boolean|Dom.PredicateCallback} [predicate]
+   *         A boolean or function that returns a boolean. Passed to DOMTokenList's toggle().
    */
   toggleClass(classToToggle, predicate) {
     Dom.toggleClass(this.el_, classToToggle, predicate);
@@ -1076,9 +1084,8 @@ class Component {
    * @param {boolean} [skipListeners]
    *        Skip the componentresize event trigger
    *
-   * @return {number|string}
-   *         The width when getting, zero if there is no width. Can be a string
-   *           postpixed with '%' or 'px'.
+   * @return {number|undefined}
+   *         The width when getting, zero if there is no width
    */
   width(num, skipListeners) {
     return this.dimension('width', num, skipListeners);
@@ -1094,9 +1101,8 @@ class Component {
    * @param {boolean} [skipListeners]
    *        Skip the componentresize event trigger
    *
-   * @return {number|string}
-   *         The width when getting, zero if there is no width. Can be a string
-   *         postpixed with '%' or 'px'.
+   * @return {number|undefined}
+   *         The height when getting, zero if there is no height
    */
   height(num, skipListeners) {
     return this.dimension('height', num, skipListeners);
@@ -1142,7 +1148,7 @@ class Component {
    * @param  {boolean} [skipListeners]
    *         Skip componentresize event trigger
    *
-   * @return {number}
+   * @return {number|undefined}
    *         The dimension when getting or 0 if unset
    */
   dimension(widthOrHeight, num, skipListeners) {
@@ -1286,6 +1292,49 @@ class Component {
   }
 
   /**
+   * Retrieves the position and size information of the component's element.
+   *
+   * @return {Object} An object with `boundingClientRect` and `center` properties.
+   *         - `boundingClientRect`: An object with properties `x`, `y`, `width`,
+   *           `height`, `top`, `right`, `bottom`, and `left`, representing
+   *           the bounding rectangle of the element.
+   *         - `center`: An object with properties `x` and `y`, representing
+   *           the center point of the element. `width` and `height` are set to 0.
+   */
+  getPositions() {
+    const rect = this.el_.getBoundingClientRect();
+
+    // Creating objects that mirror DOMRectReadOnly for boundingClientRect and center
+    const boundingClientRect = {
+      x: rect.x,
+      y: rect.y,
+      width: rect.width,
+      height: rect.height,
+      top: rect.top,
+      right: rect.right,
+      bottom: rect.bottom,
+      left: rect.left
+    };
+
+    // Calculating the center position
+    const center = {
+      x: rect.left + rect.width / 2,
+      y: rect.top + rect.height / 2,
+      width: 0,
+      height: 0,
+      top: rect.top + rect.height / 2,
+      right: rect.left + rect.width / 2,
+      bottom: rect.top + rect.height / 2,
+      left: rect.left + rect.width / 2
+    };
+
+    return {
+      boundingClientRect,
+      center
+    };
+  }
+
+  /**
    * Set the focus to this component
    */
   focus() {
@@ -1310,8 +1359,8 @@ class Component {
     if (this.player_) {
 
       // We only stop propagation here because we want unhandled events to fall
-      // back to the browser. Exclude Tab for focus trapping.
-      if (!keycode.isEventKey(event, 'Tab')) {
+      // back to the browser. Exclude Tab for focus trapping, exclude also when spatialNavigation is enabled.
+      if (event.key !== 'Tab' && !(this.player_.options_.playerOptions.spatialNavigation && this.player_.options_.playerOptions.spatialNavigation.enabled)) {
         event.stopPropagation();
       }
       this.player_.handleKeyDown(event);
@@ -1324,7 +1373,7 @@ class Component {
    * delegates to `handleKeyDown`. This means anyone calling `handleKeyPress`
    * will not see their method calls stop working.
    *
-   * @param {Event} event
+   * @param {KeyboardEvent} event
    *        The event that caused this function to be called.
    */
   handleKeyPress(event) {
@@ -1336,7 +1385,7 @@ class Component {
    * support toggling the controls through a tap on the video. They get enabled
    * because every sub-component would have extra overhead otherwise.
    *
-   * @private
+   * @protected
    * @fires Component#tap
    * @listens Component#touchstart
    * @listens Component#touchmove
@@ -1675,7 +1724,7 @@ class Component {
    */
   requestNamedAnimationFrame(name, fn) {
     if (this.namedRafs_.has(name)) {
-      return;
+      this.cancelNamedAnimationFrame(name);
     }
     this.clearTimersOnDispose_();
 
@@ -1768,6 +1817,156 @@ class Component {
   }
 
   /**
+    * Decide whether an element is actually disabled or not.
+    *
+    * @function isActuallyDisabled
+    * @param element {Node}
+    * @return {boolean}
+    *
+    * @see {@link https://html.spec.whatwg.org/multipage/semantics-other.html#concept-element-disabled}
+    */
+  getIsDisabled() {
+    return Boolean(this.el_.disabled);
+  }
+
+  /**
+    * Decide whether the element is expressly inert or not.
+    *
+    * @see {@link https://html.spec.whatwg.org/multipage/interaction.html#expressly-inert}
+    * @function isExpresslyInert
+    * @param element {Node}
+    * @return {boolean}
+    */
+  getIsExpresslyInert() {
+    return this.el_.inert && !this.el_.ownerDocument.documentElement.inert;
+  }
+
+  /**
+   * Determine whether or not this component can be considered as focusable component.
+   *
+   * @param {HTMLElement} el - The HTML element representing the component.
+   * @return {boolean}
+   *         If the component can be focused, will be `true`. Otherwise, `false`.
+   */
+  getIsFocusable(el) {
+    const element = el || this.el_;
+
+    return element.tabIndex >= 0 && !(this.getIsDisabled() || this.getIsExpresslyInert());
+  }
+
+  /**
+   * Determine whether or not this component is currently visible/enabled/etc...
+   *
+   * @param {HTMLElement} el - The HTML element representing the component.
+   * @return {boolean}
+   *         If the component can is currently visible & enabled, will be `true`. Otherwise, `false`.
+   */
+  getIsAvailableToBeFocused(el) {
+    /**
+     * Decide the style property of this element is specified whether it's visible or not.
+     *
+     * @function isVisibleStyleProperty
+     * @param element {CSSStyleDeclaration}
+     * @return {boolean}
+     */
+    function isVisibleStyleProperty(element) {
+      const elementStyle = window.getComputedStyle(element, null);
+      const thisVisibility = elementStyle.getPropertyValue('visibility');
+      const thisDisplay = elementStyle.getPropertyValue('display');
+      const invisibleStyle = ['hidden', 'collapse'];
+
+      return (thisDisplay !== 'none' && !invisibleStyle.includes(thisVisibility));
+    }
+
+    /**
+     * Decide whether the element is being rendered or not.
+     * 1. If an element has the style as "visibility: hidden | collapse" or "display: none", it is not being rendered.
+     * 2. If an element has the style as "opacity: 0", it is not being rendered.(that is, invisible).
+     * 3. If width and height of an element are explicitly set to 0, it is not being rendered.
+     * 4. If a parent element is hidden, an element itself is not being rendered.
+     * (CSS visibility property and display property are inherited.)
+     *
+     * @see {@link https://html.spec.whatwg.org/multipage/rendering.html#being-rendered}
+     * @function isBeingRendered
+     * @param element {Node}
+     * @return {boolean}
+     */
+    function isBeingRendered(element) {
+      if (!isVisibleStyleProperty(element.parentElement)) {
+        return false;
+      }
+      if (!isVisibleStyleProperty(element) || (element.style.opacity === '0') || (window.getComputedStyle(element).height === '0px' || window.getComputedStyle(element).width === '0px')) {
+        return false;
+      }
+      return true;
+    }
+
+    /**
+     * Determine if the element is visible for the user or not.
+     * 1. If an element sum of its offsetWidth, offsetHeight, height and width is less than 1 is not visible.
+     * 2. If elementCenter.x is less than is not visible.
+     * 3. If elementCenter.x is more than the document's width is not visible.
+     * 4. If elementCenter.y is less than 0 is not visible.
+     * 5. If elementCenter.y is the document's height is not visible.
+     *
+     * @function isVisible
+     * @param element {Node}
+     * @return {boolean}
+     */
+    function isVisible(element) {
+      if ((element.offsetWidth + element.offsetHeight + element.getBoundingClientRect().height + element.getBoundingClientRect().width) === 0) {
+        return false;
+      }
+
+      // Define elementCenter object with props of x and y
+      // x: Left position relative to the viewport plus element's width (no margin) divided between 2.
+      // y: Top position relative to the viewport plus element's height (no margin) divided between 2.
+      const elementCenter = {
+        x: element.getBoundingClientRect().left + element.offsetWidth / 2,
+        y: element.getBoundingClientRect().top + element.offsetHeight / 2
+      };
+
+      if (elementCenter.x < 0) {
+        return false;
+      }
+      if (elementCenter.x > (document.documentElement.clientWidth || window.innerWidth)) {
+        return false;
+      }
+      if (elementCenter.y < 0) {
+        return false;
+      }
+      if (elementCenter.y > (document.documentElement.clientHeight || window.innerHeight)) {
+        return false;
+      }
+
+      let pointContainer = document.elementFromPoint(elementCenter.x, elementCenter.y);
+
+      while (pointContainer) {
+        if (pointContainer === element) {
+          return true;
+        }
+        if (pointContainer.parentNode) {
+          pointContainer = pointContainer.parentNode;
+        } else {
+          return false;
+        }
+
+      }
+    }
+
+    // If no DOM element was passed as argument use this component's element.
+    if (!el) {
+      el = this.el();
+    }
+
+    // If element is visible, is being rendered & either does not have a parent element or its tabIndex is not negative.
+    if (isVisible(el) && isBeingRendered(el) && ((!el.parentElement) || (el.tabIndex >= 0))) {
+      return true;
+    }
+    return false;
+  }
+
+  /**
    * Register a `Component` with `videojs` given the name and the component.
    *
    * > NOTE: {@link Tech}s should not be registered as a `Component`. {@link Tech}s
@@ -1845,7 +2044,7 @@ class Component {
    * @param {string} name
    *        The Name of the component to get.
    *
-   * @return {Component}
+   * @return {typeof Component}
    *         The `Component` that got registered under the given name.
    */
   static getComponent(name) {

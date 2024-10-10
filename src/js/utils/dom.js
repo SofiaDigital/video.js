@@ -262,7 +262,7 @@ export function removeClass(element, ...classesToRemove) {
 /**
  * The callback definition for toggleClass.
  *
- * @callback module:dom~PredicateCallback
+ * @callback PredicateCallback
  * @param    {Element} element
  *           The DOM element of the Component.
  *
@@ -271,8 +271,9 @@ export function removeClass(element, ...classesToRemove) {
  *
  * @return   {boolean|undefined}
  *           If `true` is returned, the `classToToggle` will be added to the
- *           `element`. If `false`, the `classToToggle` will be removed from
- *           the `element`. If `undefined`, the callback will be ignored.
+ *           `element`, but not removed. If `false`, the `classToToggle` will be removed from
+ *           the `element`, but not added. If `undefined`, the callback will be ignored.
+ *
  */
 
 /**
@@ -285,7 +286,7 @@ export function removeClass(element, ...classesToRemove) {
  * @param  {string} classToToggle
  *         The class that should be toggled.
  *
- * @param  {boolean|module:dom~PredicateCallback} [predicate]
+ * @param  {boolean|PredicateCallback} [predicate]
  *         See the return value for {@link module:dom~PredicateCallback}
  *
  * @return {Element}
@@ -580,7 +581,15 @@ export function getPointerPosition(el, event) {
         translated.y += values[13];
       }
 
-      item = item.parentNode;
+      if (item.assignedSlot && item.assignedSlot.parentElement && window.WebKitCSSMatrix) {
+        const transformValue = window.getComputedStyle(item.assignedSlot.parentElement).transform;
+        const matrix = new window.WebKitCSSMatrix(transformValue);
+
+        translated.x += matrix.m41;
+        translated.y += matrix.m42;
+      }
+
+      item = item.parentNode || item.host;
     }
   }
 
@@ -770,6 +779,11 @@ export function isSingleLeftClick(event) {
   // `button` and `buttons` equal to 0
   if (event.type === 'mouseup' && event.button === 0 &&
       event.buttons === 0) {
+    return true;
+  }
+
+  // MacOS Sonoma trackpad when "tap to click enabled"
+  if (event.type === 'mousedown' && event.button === 0 && event.buttons === 0) {
     return true;
   }
 

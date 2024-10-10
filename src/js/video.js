@@ -2,6 +2,9 @@
  * @file video.js
  * @module videojs
  */
+/**
+ * @typedef { string } version
+ */
 import {version} from '../../package.json';
 import window from 'global/window';
 import {
@@ -31,11 +34,14 @@ import * as Dom from './utils/dom.js';
 import * as browser from './utils/browser.js';
 import * as Url from './utils/url.js';
 import * as Obj from './utils/obj';
+import VjsErrors from './consts/errors';
 import xhr from '@videojs/xhr';
 
 // Include the built-in techs
 import Tech from './tech/tech.js';
 import { use as middlewareUse, TERMINATOR } from './tech/middleware.js';
+
+/** @import { PlayerReadyCallback } from './player' */
 
 /**
  * Normalize an `id` value by trimming off a leading `#`
@@ -48,13 +54,6 @@ import { use as middlewareUse, TERMINATOR } from './tech/middleware.js';
  *          The string, without any leading `#`.
  */
 const normalizeId = (id) => id.indexOf('#') === 0 ? id.slice(1) : id;
-
-/**
- * A callback that is called when a component is ready. Does not have any
- * parameters and any callback value will be ignored. See: {@link Component~ReadyCallback}
- *
- * @callback ReadyCallback
- */
 
 /**
  * The `videojs()` function doubles as the main function for users to create a
@@ -117,7 +116,7 @@ const normalizeId = (id) => id.indexOf('#') === 0 ? id.slice(1) : id;
  *         Options object for providing settings.
  *         See: [Options Guide](https://docs.videojs.com/tutorial-options.html).
  *
- * @param  {ReadyCallback} [ready]
+ * @param  {PlayerReadyCallback} [ready]
  *         A function to be called when the {@link Player} and {@link Tech} are
  *         ready.
  *
@@ -163,7 +162,7 @@ function videojs(id, options, ready) {
   // Store a copy of the el before modification, if it is to be restored in destroy()
   // If div ingest, store the parent div
   if (options.restoreEl === true) {
-    options.restoreEl = (el.parentNode && el.parentNode.hasAttribute('data-vjs-player') ? el.parentNode : el).cloneNode(true);
+    options.restoreEl = (el.parentNode && el.parentNode.hasAttribute && el.parentNode.hasAttribute('data-vjs-player') ? el.parentNode : el).cloneNode(true);
   }
 
   hooks('beforesetup').forEach((hookFunction) => {
@@ -317,10 +316,10 @@ videojs.getComponent = Component.getComponent;
  * @param {string} name
  *        The class name of the component
  *
- * @param {Component} comp
+ * @param {typeof Component} comp
  *        The component class
  *
- * @return {Component}
+ * @return {typeof Component}
  *         The newly registered component
  */
 videojs.registerComponent = (name, comp) => {
@@ -407,9 +406,11 @@ videojs.deregisterPlugin = Plugin.deregisterPlugin;
  *
  * @param {string} name
  *        The plugin name
- *
- * @param {Plugin|Function} plugin
+*
+ * @param {typeof Plugin|Function} plugin
  *         The plugin sub-class or function
+ *
+ * @return {typeof Plugin|Function}
  */
 videojs.plugin = (name, plugin) => {
   log.warn('videojs.plugin() is deprecated; use videojs.registerPlugin() instead');
@@ -611,5 +612,8 @@ videojs.str = Str;
  * @see {@link module:url|url}
  */
 videojs.url = Url;
+
+// The list of possible error types to occur in video.js
+videojs.Error = VjsErrors;
 
 export default videojs;

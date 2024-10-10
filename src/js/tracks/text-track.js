@@ -11,6 +11,8 @@ import { isCrossOrigin } from '../utils/url.js';
 import XHR from '@videojs/xhr';
 import {merge} from '../utils/obj';
 
+/** @import Tech from '../tech/tech' */
+
 /**
  * Takes a webvtt file contents and parses it into cues
  *
@@ -128,7 +130,7 @@ class TextTrack extends Track {
    * @param {Object} options={}
    *        Object of option names and values
    *
-   * @param { import('../tech/tech').default } options.tech
+   * @param {Tech} options.tech
    *        A reference to the tech that owns this TextTrack.
    *
    * @param {TextTrack~Kind} [options.kind='subtitles']
@@ -391,7 +393,8 @@ class TextTrack extends Track {
   addCue(originalCue) {
     let cue = originalCue;
 
-    if (cue.constructor && cue.constructor.name !== 'VTTCue') {
+    // Testing if the cue is a VTTCue in a way that survives minification
+    if (!('getCueAsHTML' in cue)) {
       cue = new window.vttjs.VTTCue(originalCue.startTime, originalCue.endTime, originalCue.text);
 
       for (const prop in originalCue) {
@@ -440,6 +443,8 @@ class TextTrack extends Track {
 
 /**
  * cuechange - One or more cues in the track have become active or stopped being active.
+ *
+ * @protected
  */
 TextTrack.prototype.allowedEvents_ = {
   cuechange: 'cuechange'

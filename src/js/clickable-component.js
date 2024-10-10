@@ -4,7 +4,8 @@
 import Component from './component';
 import * as Dom from './utils/dom.js';
 import log from './utils/log.js';
-import keycode from 'keycode';
+
+/** @import Player from './player' */
 
 /**
  * Component which is clickable or keyboard actionable, but is not a
@@ -17,7 +18,7 @@ class ClickableComponent extends Component {
   /**
    * Creates an instance of this class.
    *
-   * @param  { import('./player').default } player
+   * @param  {Player} player
    *         The `Player` that this class should be attached to.
    *
    * @param  {Object} [options]
@@ -233,7 +234,7 @@ class ClickableComponent extends Component {
    *
    * By default, if the key is Space or Enter, it will trigger a `click` event.
    *
-   * @param {Event} event
+   * @param {KeyboardEvent} event
    *        The `keydown` event that caused this function to be called.
    *
    * @listens keydown
@@ -243,7 +244,7 @@ class ClickableComponent extends Component {
     // Support Space or Enter key operation to fire a click event. Also,
     // prevent the event from propagating through the DOM and triggering
     // Player hotkeys.
-    if (keycode.isEventKey(event, 'Space') || keycode.isEventKey(event, 'Enter')) {
+    if (event.key === ' ' || event.key === 'Enter') {
       event.preventDefault();
       event.stopPropagation();
       this.trigger('click');
